@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Grid from '@mui/material/Grid';
 import MainCard from 'ui-component/cards/MainCard';
-import { useMediaQuery, Typography, TextField, InputAdornment, MenuItem, Button } from '@mui/material';
+import { useMediaQuery, Typography, TextField, InputAdornment, MenuItem, Button, CircularProgress } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import ModeIcon from '@mui/icons-material/Mode';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -16,6 +16,8 @@ import { useLogout } from '../../../hooks/useLogout';
 import { alpha, styled } from '@mui/material/styles';
 import { DataGrid, gridClasses } from '@mui/x-data-grid';
 import AddIcon from '@mui/icons-material/Add';
+import Swal from 'sweetalert2';
+import withReactContent from 'sweetalert2-react-content';
 
 const ODD_OPACITY = 0.2;
 
@@ -48,6 +50,7 @@ export default function ViewUsers() {
   const { user } = useAuthContext();
   const { permissions } = user || {};
   const [userTypes, setUserTypes] = useState([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [selectedUserType, setSelectedUserType] = useState('');
   const [filteredData, setFilteredData] = useState([]);
   const [searchText, setSearchText] = useState('');
@@ -93,6 +96,35 @@ export default function ViewUsers() {
       setError(error);
       setLoading(false);
     }
+  };
+
+  const Toast = withReactContent(
+    Swal.mixin({
+      toast: true,
+      position: 'bottom-end',
+      iconColor: 'white',
+      customClass: {
+        popup: 'colored-toast'
+      },
+      showConfirmButton: false,
+      timer: 3500,
+      timerProgressBar: true
+    })
+  );
+
+  const showSuccessSwal = () => {
+    Toast.fire({
+      icon: 'success',
+      title: 'Deleted Successfull.'
+    });
+  };
+
+  // error showErrorSwal
+  const showErrorSwal = () => {
+    Toast.fire({
+      icon: 'error',
+      title: 'Error While Deleting.'
+    });
   };
 
   useEffect(() => {
@@ -173,16 +205,68 @@ export default function ViewUsers() {
             color="error"
             onClick={() => {
               // Handle delete logic here
+              handleDelete(params.row._id);
             }}
             style={{ marginLeft: '5px' }}
             sx={{ borderRadius: '50%', padding: '8px', minWidth: 'unset', width: '32px', height: '32px' }}
           >
-            <DeleteIcon sx={{ fontSize: '18px' }} />
+            {isDeleting ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                <DeleteIcon sx={{ fontSize: '18px' }} />
+              )}
+           
           </Button>
         </>
       )
     }
   ];
+
+  const handleDelete = (id) => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: 'You will not be able to recover this user!',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'No, keep it'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        deleteUser([id]);
+      }
+    });
+  };
+
+  async function deleteUser(id) {
+    setIsDeleting(true);
+    try {
+      const res = await fetch(config.apiUrl + `api/delete-user/${id}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+      if (!res.ok) {
+        if (res.status === 401) {
+          console.error('Unauthorized access. Logging out.');
+          logout();
+        }
+
+        if (res.status === 500) {
+          console.error('Internal Server Error.');
+          logout();
+          return;
+        }
+        return;
+      }
+      showSuccessSwal();
+      fetchData();
+    } catch (error) {
+      console.error(error);
+      setError(error);
+      showErrorSwal();
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   function updateUser(userId) {
     console.log('clicked user id', userId);
